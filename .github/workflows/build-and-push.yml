@@ -1,6 +1,6 @@
 name: build-and-push
 
-# Runs on every push and PR to main. Pushes to GHCR only on push-to-main
+# Runs on every push and PR to main. Pushes to Docker Hub only on push-to-main
 # (so PR builds verify the Dockerfile still builds but don't pollute the
 # registry with branch images).
 on:
@@ -11,8 +11,7 @@ on:
     branches: [main]
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: mzdotai/otari-sandbox-container
 
 jobs:
   test:
@@ -47,7 +46,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -57,19 +55,18 @@ jobs:
       # Only log in (and push) on push events. PRs from forks can't access
       # secrets anyway; PRs from same-repo branches still skip the push so
       # that "PR open" doesn't publish branch images.
-      - name: Log in to GHCR
+      - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.IMAGE_NAME }}
           tags: |
             # On every push to main: tag :latest and the short SHA.
             type=raw,value=latest,enable={{is_default_branch}}
