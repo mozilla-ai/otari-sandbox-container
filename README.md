@@ -5,11 +5,11 @@ API. Pairs with [mozilla-ai/gateway](https://github.com/mozilla-ai/gateway) to
 provide `code_execution` tool support, but the contract is plain HTTP so any
 client that speaks it can use the container directly.
 
-Built images are published to GitHub Container Registry:
+Built images are published to Docker Hub:
 
 ```
-ghcr.io/mozilla-ai/otari-sandbox-container:latest
-ghcr.io/mozilla-ai/otari-sandbox-container:<sha>
+mzdotai/otari-sandbox-container:latest
+mzdotai/otari-sandbox-container:<sha>
 ```
 
 Each session has its own `/var/sandbox/sessions/<id>/` tree with a private
@@ -46,8 +46,8 @@ make run       # docker run -p 8080:8080
 ## Pulling the published image
 
 ```sh
-docker pull ghcr.io/mozilla-ai/otari-sandbox-container:latest
-docker run --rm -p 8080:8080 ghcr.io/mozilla-ai/otari-sandbox-container:latest
+docker pull mzdotai/otari-sandbox-container:latest
+docker run --rm -p 8080:8080 mzdotai/otari-sandbox-container:latest
 ```
 
 ## API
