@@ -1,0 +1,92 @@
+name: build-and-push
+
+# Runs on every push and PR to main. Pushes to GHCR only on push-to-main
+# (so PR builds verify the Dockerfile still builds but don't pollute the
+# registry with branch images).
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: pytest + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff (lint)
+        run: uv run ruff check sandbox tests
+
+      - name: Ruff (format check)
+        run: uv run ruff format --check sandbox tests
+
+      - name: Pytest
+        run: uv run pytest tests/ -v
+
+  build-and-push:
+    name: docker build (+ push on main)
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only log in (and push) on push events. PRs from forks can't access
+      # secrets anyway; PRs from same-repo branches still skip the push so
+      # that "PR open" doesn't publish branch images.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # On every push to main: tag :latest and the short SHA.
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,enable={{is_default_branch}}
+            # On git tag v1.2.3: also tag :1.2.3, :1.2, :1.
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # PR builds get a :pr-<n> tag for debugging if push were enabled.
+            type=ref,event=pr
+
+      - name: Build (and push on main / tags)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
