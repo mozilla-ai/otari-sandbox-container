@@ -67,6 +67,29 @@ the current `/exec` is request/response only.
 
 The full request/response schemas live in `sandbox/models.py`.
 
+## Observability
+
+Telemetry export (traces, metrics, logs) is **off by default** — this image
+is pulled and run by arbitrary third parties, so it should never phone home
+unless an operator explicitly opts in. Structured JSON logging is available
+independently of telemetry export.
+
+| Env var | Default | Description |
+|---|---|---|
+| `TELEMETRY_ENABLED` | `false` | Enables OTLP export of traces, metrics, and logs. |
+| `TELEMETRY_SERVICE_NAME` | `otari-sandbox-container` | OTel `service.name` resource attribute. |
+| `TELEMETRY_OTLP_ENDPOINT` | `http://localhost:4318` | Base OTLP/HTTP endpoint; `/v1/traces`, `/v1/metrics`, `/v1/logs` are appended per signal. |
+| `TELEMETRY_OTLP_HEADERS` | *(unset)* | Raw OTLP exporter headers, e.g. an auth header for a hosted collector. Leave unset for collectors that don't require auth. |
+| `ENVIRONMENT` | `production` | Reported as the `deployment.environment` resource attribute and in JSON log lines. |
+| `LOG_FORMAT` | `text` | `text` or `json`. |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. |
+
+Enabling telemetry requires an OTLP/HTTP-compatible collector reachable at
+`TELEMETRY_OTLP_ENDPOINT`. Deploying an actual collector (as a sidecar,
+a cluster-level agent, or a hosted endpoint) is the responsibility of
+whatever deployment runs this image — this repo only emits telemetry, it
+doesn't provision anywhere to send it.
+
 ## Security notes
 
 - The container runs as a non-root user (uid 1000).
