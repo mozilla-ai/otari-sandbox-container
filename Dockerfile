@@ -56,6 +56,16 @@ RUN pip install --no-cache-dir \
         "uvicorn[standard]==0.44.*" \
         "pydantic==2.12.*" \
         "python-multipart==0.0.24" \
+        "httpx==0.28.*" \
+        # Observability (OpenTelemetry) — optional at runtime, gated by
+        # TELEMETRY_ENABLED; baked in here so the published image doesn't
+        # need to be rebuilt to turn it on.
+        "opentelemetry-api==1.43.*" \
+        "opentelemetry-sdk==1.43.*" \
+        "opentelemetry-exporter-otlp-proto-http==1.43.*" \
+        "opentelemetry-instrumentation-fastapi==0.64b0" \
+        "opentelemetry-instrumentation-httpx==0.64b0" \
+        "opentelemetry-instrumentation-logging==0.64b0" \
         # Data / scientific computing
         "numpy==2.2.*" \
         "pandas==2.2.*" \

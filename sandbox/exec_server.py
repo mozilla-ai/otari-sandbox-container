@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -51,6 +52,7 @@ from sandbox.files import (
     read_file,
     upload_file,
 )
+from sandbox.logging_config import configure_logging
 from sandbox.models import (
     BashExecutionInput,
     BashExecutionResultBlock,
@@ -77,9 +79,43 @@ from sandbox.sessions import (
     SessionManager,
     SessionNotFoundError,
 )
+from sandbox.telemetry import flush_telemetry, instrument_app, setup_telemetry
 from sandbox.text_editor import run_text_editor
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Observability bootstrap. Off/quiet by default — this image is pulled and
+# run by arbitrary third parties, so it should never export telemetry unless
+# an operator opts in. See README.md "Observability" for the full reference.
+# ---------------------------------------------------------------------------
+
+_SERVICE_NAME = os.environ.get("TELEMETRY_SERVICE_NAME") or "otari-sandbox-container"
+_ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
+_LOG_FORMAT = os.environ.get("LOG_FORMAT", "text")
+_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+_TELEMETRY_ENABLED = os.environ.get("TELEMETRY_ENABLED", "false").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+_TELEMETRY_OTLP_ENDPOINT = os.environ.get("TELEMETRY_OTLP_ENDPOINT", "http://localhost:4318")
+_TELEMETRY_OTLP_HEADERS = os.environ.get("TELEMETRY_OTLP_HEADERS")
+
+configure_logging(
+    log_format=_LOG_FORMAT,  # type: ignore[arg-type]
+    log_level=_LOG_LEVEL,
+    service_name=_SERVICE_NAME,
+    environment=_ENVIRONMENT,
+)
+setup_telemetry(
+    enabled=_TELEMETRY_ENABLED,
+    service_name=_SERVICE_NAME,
+    environment=_ENVIRONMENT,
+    otlp_endpoint=_TELEMETRY_OTLP_ENDPOINT,
+    otlp_headers=_TELEMETRY_OTLP_HEADERS,
+)
 
 # Module-level singleton — the lifespan context starts/stops it.
 _session_manager = SessionManager()
@@ -96,6 +132,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await gc_task
         await _session_manager.shutdown()
+        # Drain pending OTEL exports so a graceful SIGTERM doesn't drop the
+        # last few seconds of telemetry.
+        flush_telemetry()
 
 
 async def _gc_loop() -> None:
@@ -111,6 +150,7 @@ async def _gc_loop() -> None:
 
 
 app = FastAPI(title="otari-sandbox-container", lifespan=lifespan)
+instrument_app(app)
 
 
 # ---------------------------------------------------------------------------
@@ -263,17 +303,15 @@ async def _run_bash_execution(session: Session, request: ExecRequest) -> ExecOut
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
     # Bash inherits the session's workspace as its CWD via SANDBOX_WORKSPACE,
     # which we set per-call so concurrent sessions stay isolated.
-    import os as _os
-
-    prev = _os.environ.get("SANDBOX_WORKSPACE")
-    _os.environ["SANDBOX_WORKSPACE"] = str(session.workspace_dir)
+    prev = os.environ.get("SANDBOX_WORKSPACE")
+    os.environ["SANDBOX_WORKSPACE"] = str(session.workspace_dir)
     try:
         return await run_bash(parsed.command, timeout_seconds=request.timeout_seconds)
     finally:
         if prev is None:
-            _os.environ.pop("SANDBOX_WORKSPACE", None)
+            os.environ.pop("SANDBOX_WORKSPACE", None)
         else:
-            _os.environ["SANDBOX_WORKSPACE"] = prev
+            os.environ["SANDBOX_WORKSPACE"] = prev
 
 
 async def _run_text_editor_execution(session: Session, request: ExecRequest) -> ExecOutcome:
