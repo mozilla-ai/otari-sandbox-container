@@ -97,6 +97,10 @@ RUN mkdir -p /opt/sandbox/sandbox /var/sandbox/sessions \
 
 COPY --chown=sandbox:sandbox sandbox/ /opt/sandbox/sandbox/
 
+# The published image is a redistribution of this work, so it ships its own
+# copy of the license (Apache-2.0 section 4(a)).
+COPY --chown=sandbox:sandbox LICENSE /opt/sandbox/LICENSE
+
 USER sandbox
 WORKDIR /opt/sandbox
 
