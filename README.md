@@ -102,3 +102,7 @@ doesn't provision anywhere to send it.
   another trusted component) is the sole client, reached over a private
   Docker network or similar. The gateway's `docker-compose.yml` binds the
   sandbox port to `127.0.0.1` for this reason.
+
+## License
+
+Apache 2.0. See [`LICENSE`](LICENSE).
