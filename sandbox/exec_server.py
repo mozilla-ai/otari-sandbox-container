@@ -70,6 +70,11 @@ from sandbox.platform_tools import (
     StubConfig,
     install_stubs,
 )
+from sandbox.request_guard import (
+    RequestGuardMiddleware,
+    allowed_hosts_from_env,
+    allowed_origins_from_env,
+)
 from sandbox.runner_pool import ExecOutcome
 from sandbox.sessions import (
     DEFAULT_GC_INTERVAL_SECONDS,
@@ -151,6 +156,13 @@ async def _gc_loop() -> None:
 
 app = FastAPI(title="otari-sandbox-container", lifespan=lifespan)
 instrument_app(app)
+# Added last so it runs outermost: refuse DNS-rebinding / cross-origin
+# browser requests before any route (or session) is touched.
+app.add_middleware(
+    RequestGuardMiddleware,
+    allowed_hosts=allowed_hosts_from_env(),
+    allowed_origins=allowed_origins_from_env(),
+)
 
 
 # ---------------------------------------------------------------------------

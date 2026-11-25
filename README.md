@@ -102,6 +102,20 @@ doesn't provision anywhere to send it.
   another trusted component) is the sole client, reached over a private
   Docker network or similar. The gateway's `docker-compose.yml` binds the
   sandbox port to `127.0.0.1` for this reason.
+- Binding to loopback alone does not stop a browser on the same machine
+  from reaching the port (DNS rebinding, cross-site requests). The server
+  therefore rejects:
+  - requests whose `Host` header isn't an IP literal, `localhost`, a
+    single-label name (such as a Docker or Kubernetes service name like
+    `sandbox`), or an entry in `SANDBOX_ALLOWED_HOSTS` (HTTP 400);
+  - requests carrying an `Origin` header not listed in
+    `SANDBOX_ALLOWED_ORIGINS` (HTTP 403). Server-to-server clients don't
+    send `Origin`, so this only affects browsers.
+
+| Env var | Default | Description |
+|---|---|---|
+| `SANDBOX_ALLOWED_HOSTS` | *(unset)* | Comma-separated extra hostnames to accept in `Host`, for callers that use a dotted name, e.g. `sandbox.ns.svc.cluster.local` or `*.svc.cluster.local`. |
+| `SANDBOX_ALLOWED_ORIGINS` | *(unset)* | Comma-separated browser origins to accept, e.g. `http://localhost:8180`. Leave unset unless you need a browser to call the API directly. |
 
 ## License
 
